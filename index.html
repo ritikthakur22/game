@@ -26,7 +26,7 @@ button.primary{background:linear-gradient(135deg,#8d2037,#41257c);border-color:#
 button.good{background:#143c2b;border-color:#2e7b56}
 button.danger{background:#431520;border-color:#7c2d40}
 button:disabled{opacity:.4;cursor:not-allowed}
-#hud{display:none;position:absolute;left:12px;right:12px;top:10px}
+#hud{display:none;position:absolute;left:12px;right:12px;top:10px;z-index:100;}
 .hudrow{display:flex;justify-content:space-between;gap:7px;align-items:center}
 .hudbox{background:#080b12cc;border:1px solid #293447;border-radius:10px;padding:7px 10px;font-size:13px}
 .hidden{display:none!important}.visible{display:block!important}
@@ -58,7 +58,7 @@ display:flex;align-items:center;justify-content:center;font-size:25px;font-weigh
       <button id="levels">Levels</button>
       <button id="about">How to Play</button>
       <button id="toggleSound">Sound: ON</button>
-      <button id="resetSave" class="danger">Reset Save</button>
+      <button id="uploadChar" onclick="uploadCharacter()">Upload Character</button><button id="resetSave" class="danger">Reset Save</button>
     </div>
     <div id="tip">Rule #1: Do not trust the game.</div>
   </div>
@@ -69,7 +69,19 @@ display:flex;align-items:center;justify-content:center;font-size:25px;font-weigh
       <div class="hudbox" id="hDeaths">Deaths: 0</div>
       <div class="hudbox" id="hTime">0.0s</div>
       <div class="hudbox" id="hCoins">Coins: 0</div>
+      <div class="hudbox" id="hSettings" style="cursor:pointer; background:#2b3443; color:#fff; pointer-events:auto;" onclick="showSettings()">⚙ Settings</div>
       <div class="hudbox" id="hHint" style="color:var(--cyan); max-width: 250px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
+    </div>
+  </div>
+
+
+  <div id="settingsPanel" class="panel" style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); z-index:100; text-align:center;">
+    <h2>Game Paused</h2>
+    <div style="display:flex; flex-direction:column; align-items:center;">
+      <button onclick="uploadCharacter()" style="margin:5px; width:200px;">Change Character</button>
+      <button onclick="restartLevelFromSettings()" style="margin:5px; width:200px;">Restart Level</button>
+      <button onclick="exitToMenuFromSettings()" style="margin:5px; width:200px;" class="danger">Exit to Menu</button>
+      <button onclick="hideSettings()" style="margin:5px; width:200px;" class="primary">Resume</button>
     </div>
   </div>
 
@@ -127,11 +139,43 @@ const elMenu=document.getElementById("menu"),elHud=document.getElementById("hud"
 const elHLevel=document.getElementById("hLevel"),elHDeaths=document.getElementById("hDeaths"),elHTime=document.getElementById("hTime"),elHCoins=document.getElementById("hCoins"),elHHint=document.getElementById("hHint");
 function showGameUI(){elMenu.classList.add("hidden");elHud.classList.add("visible");elTouch.style.display=isTouchDevice?"block":"none";if(document.activeElement)document.activeElement.blur();}
 function showMenuUI(){elMenu.classList.remove("hidden");elHud.classList.remove("visible");elTouch.style.display="none";}
+
+let customCharImage = null;
+try {
+  let stored = localStorage.getItem('custom_char');
+  if(stored) {
+    customCharImage = new Image();
+    customCharImage.src = stored;
+  }
+} catch(e) {}
+function uploadCharacter() {
+  if(save.coins < 3) {
+    alert("You need at least 3 coins to upload a custom character image!");
+    return;
+  }
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/png, image/jpeg, image/x-icon, image/gif';
+  input.onchange = e => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      customCharImage = new Image();
+      customCharImage.src = ev.target.result;
+      try { localStorage.setItem('custom_char', ev.target.result); } catch(err) {}
+      alert("Character updated!");
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+}
+
 const KEY="ninja_rage_run_v1";
 const defaultSave={unlocked:1,stars:{},coins:0,selected:0};
 let save=load();
-function load(){try{return Object.assign(defaultSave,JSON.parse(sessionStorage.getItem(KEY)||"{}"))}catch(e){return {...defaultSave}}}
-function write(){try{sessionStorage.setItem(KEY,JSON.stringify(save))}catch(e){}}
+function load(){try{return Object.assign(defaultSave,JSON.parse(localStorage.getItem(KEY)||"{}"))}catch(e){return {...defaultSave}}}
+function write(){try{localStorage.setItem(KEY,JSON.stringify(save))}catch(e){}}
 
 const keys=Object.create(null),touch={};
 let ritikAdmin=false;
@@ -217,6 +261,12 @@ function generateLevel(lv){
   const fakeCpChance = 0.05 + d*0.15;
   const gapMin=40+d*20, gapRange=70+d*70, widthRange=140-d*30;
   let checkpointPending=false;
+  let gapMinL=gapMin, gapRangeL=gapRange, widthRangeL=widthRange, yRange=150;
+  let blinkChance=.05+d*.10;
+  if(lv.id === 1) { 
+    fakeChance = 0.05; crumbChance = 0; movingChance = 0; spikeChance = 0; fireChance = 0; enemyChance = 0; blinkChance = 0;
+    gapMinL = 10; gapRangeL = 40; widthRangeL = 200; yRange = 40;
+  }
 
   if (lv.mode === "trap") { fakeChance *= 2.5; crumbChance *= 2; spikeChance *= 1.5; }
   else if (lv.mode === "gauntlet") { enemyChance *= 2.5; fireChance *= 2; checkpointChance = 0; }
@@ -224,16 +274,20 @@ function generateLevel(lv){
   else if (lv.mode === "keys") { movingChance *= 1.5; enemyChance *= 1.5; }
 
   while(x<L-260){
-    const gap=gapMin+r()*gapRange, w=90+r()*widthRange;
+    const gap=gapMinL+r()*gapRangeL, w=90+r()*widthRangeL;
     x+=gap;
-    y=250+r()*150;
+    if(lv.id === 1) y = 250 + r()*40;
+    else y = Math.max(200, Math.min(420, y + (r() - 0.4) * 200));
     const troll=r();
     let kind="solid";
     if(troll<fakeChance) kind="fake";
     else if(troll<fakeChance+crumbChance) kind="crumb";
     else if(troll<fakeChance+crumbChance+movingChance) kind="moving";
+    else if(troll<fakeChance+crumbChance+movingChance+0.05) kind="phantom";
+    else if(troll<fakeChance+crumbChance+movingChance+0.05+blinkChance) kind="blink";
 
     const p=rect(x,y,w,28,kind,{baseY:y,amp:40+r()*50,phase:r()*Math.PI*2,speed:.8+r()*1.2});
+    p.id = platforms.length;
     platforms.push(p);
 
     let hasCheckpoint = false;
@@ -315,6 +369,25 @@ function resetAtCheckpoint(){player.x=player.checkpoint.x;player.y=player.checkp
 function toast(s,t=1.2){elToast.textContent=s;elToast.style.display="block";toastTimer=t}
 function pause(){paused=!paused;toast(paused?"PAUSED":"GO",1)}
 
+function showSettings() {
+  if (state !== "play") return;
+  paused = true;
+  document.getElementById("settingsPanel").style.display = "block";
+}
+function hideSettings() {
+  paused = false;
+  document.getElementById("settingsPanel").style.display = "none";
+}
+function restartLevelFromSettings() {
+  hideSettings();
+  start(level.id);
+}
+function exitToMenuFromSettings() {
+  hideSettings();
+  showMenu();
+}
+
+
 function showMenu(){
   state="menu";showMenuUI();
 }
@@ -333,7 +406,7 @@ function levelsUI(){
 function menuUI(){
   const p=elMenu;
   p.innerHTML=`<h1>Ninja vs Evil Corp</h1><div class="sub"><b>RAGE RUN</b> — Developed by Ritik. 30 levels of pure rage.</div>
-    <div class="row"><button class="primary" id="play">Continue</button><button id="levels">Levels</button><button id="about">How to Play</button><button id="toggleSound">Sound: ${soundEnabled?"ON":"OFF"}</button><button id="resetSave" class="danger">Reset Save</button></div>
+    <div class="row"><button class="primary" id="play">Continue</button><button id="levels">Levels</button><button id="about">How to Play</button><button id="toggleSound">Sound: ${soundEnabled?"ON":"OFF"}</button><button id="uploadChar" onclick="uploadCharacter()">Upload Character</button><button id="resetSave" class="danger">Reset Save</button></div>
     <div id="tip">Rule #1: Do not trust the game.</div>`;
   document.getElementById("play").onclick=()=>start(save.unlocked);
   document.getElementById("levels").onclick=levelsUI;
@@ -366,6 +439,7 @@ function solidPlatforms(){
 }
 function update(dt){
   if(state!=="play"||paused)return;
+  const now = performance.now()/1000;
   levelTime+=dt;totalTime+=dt;solidPlatforms();
   const inp=input();
   if(inp.reset){if(!keys.__resetLock){keys.__resetLock=true;resetAtCheckpoint();setTimeout(()=>keys.__resetLock=false,150)}} else keys.__resetLock=false;
@@ -392,10 +466,12 @@ function update(dt){
   player.y+=player.vy*dt;
 
   for(const p of platforms){
+    if(p.kind==="phantom")continue;
+    if(p.kind==="blink" && Math.sin(now*2.5 + p.id*1.3) < 0) continue;
     if(p.kind==="fake"&&p.revealed)continue;
     if(p.kind==="fake"&&!p.revealed&&aabb(player,{...p,y:p.y,w:p.w,h:p.h})&&player.vy>0){
       if(!p._timer)p._timer=.22; else p._timer-=dt;
-      if(p._timer<=0){p.revealed=true;toast("LOL. FAKE FLOOR.",.8);playExternalSound('fake');}
+      if(p._timer<=0){p.revealed=true;toast("lol fake block/steps",.8);playExternalSound('fake');}
     }
     if(aabb(player,p)&&player.vy>=0&&player.y+player.h-player.vy*dt<=p.y+8){
       player.y=p.y-player.h;player.vy=0;player.onGround=true;player.coyote=.11;
@@ -456,7 +532,7 @@ function update(dt){
   shake=Math.max(0,shake-dt*22);
   elHLevel.textContent=`L${level.id} · ${worlds[level.world].name}`;
   elHDeaths.textContent=`Deaths: ${deaths}`;
-  elHTime.textContent=`${levelTime.toFixed(1)}s`;
+  elHTime.innerHTML=`<span style="font-size:1.2em; font-weight:bold;">Developer: Ritik</span>`;
   elHCoins.textContent=`Coins: ${save.coins}`;
   elHHint.textContent=`Hint: ${tricks[(level.id-1)%tricks.length]}`;
 }
@@ -489,8 +565,8 @@ function results(){
 function drawBackground(){
   const w=worlds[level.world],g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,w.bg);g.addColorStop(1,"#07090e");ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
   ctx.globalAlpha=.22;
-  const time = performance.now()/1000;
-  for(let i=0;i<18;i++){let x=(i*120-(cameraX*.18)%120),hh=80+(i%5)*32;ctx.fillStyle=w.accent;ctx.fillRect(x,H-130-hh + Math.sin(time + i)*10,78,hh)}
+  const time = performance.now()/1000; const now = time;
+  for(let i=0;i<150;i++){let x=(i*30-(cameraX*.3)%30);let hh=40+Math.sin(time*5+i)*15+Math.cos(time*8+i*1.3)*10;ctx.fillStyle="#ff4f65";ctx.beginPath();ctx.moveTo(x,H);ctx.lineTo(x+15,H-hh);ctx.lineTo(x+30,H);ctx.fill();ctx.fillStyle="#ff8d30";ctx.beginPath();ctx.moveTo(x+7,H);ctx.lineTo(x+15,H-hh*.6);ctx.lineTo(x+23,H);ctx.fill();}
   ctx.globalAlpha=0.04;
   ctx.strokeStyle="#ffffff";
   ctx.lineWidth=1;
@@ -502,6 +578,7 @@ function drawBackground(){
   ctx.globalAlpha=1;
 }
 function draw(){
+  const now = performance.now()/1000;
   if(state==="menu"||state==="results"){ctx.fillStyle="#07080d";ctx.fillRect(0,0,W,H);return}
   drawBackground();
   ctx.save();
@@ -510,10 +587,14 @@ function draw(){
 
   for(const p of platforms){
     if(p.kind==="broken"||p.w<=0)continue;
-    ctx.fillStyle=p.kind==="fake"?"#382536":p.kind==="crumb"?"#57452c":p.kind==="moving"?"#30485a":"#273443";
+    let alpha = 1;
+    if(p.kind==="blink") { if(Math.sin(now*2.5 + p.id*1.3) < 0) alpha = 0.15; }
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle=p.kind==="fake"?"#382536":p.kind==="crumb"?"#57452c":p.kind==="moving"?"#30485a":p.kind==="blink"?"#4a2a4a":"#273443";
     ctx.fillRect(p.x,p.y,p.w,p.h);
-    ctx.fillStyle=p.kind==="fake"?"#ff4f65":"#55e7ff";ctx.fillRect(p.x,p.y,p.w,4);
+    ctx.fillStyle=p.kind==="fake"?"#ff4f65":p.kind==="blink"?"#e84be8":"#55e7ff";ctx.fillRect(p.x,p.y,p.w,4);
     if(p.kind==="fake"){ctx.fillStyle="#ff4f6540";ctx.fillRect(p.x+4,p.y+8,p.w-8,3)}
+    ctx.globalAlpha = 1;
   }
 
   for(const h of hazards){
@@ -543,10 +624,21 @@ function draw(){
 
   const x=player.x,y=player.y;
   ctx.fillStyle="#0008";ctx.fillRect(x-5,y+player.h-3,40,8);
-  ctx.fillStyle="#171d2c";ctx.fillRect(x,y,player.w,player.h);
-  ctx.fillStyle="#d9f0ff";ctx.fillRect(x+4,y+5,22,15);
-  ctx.fillStyle="#ff4f65";ctx.fillRect(player.face>0?x+22:x-4,y+10,8,5);
-  ctx.fillStyle="#0a0d14";ctx.fillRect(x+5,y+25,7,17);ctx.fillRect(x+19,y+25,7,17);
+  if (customCharImage && customCharImage.complete && customCharImage.width > 0) {
+    if (player.face < 0) {
+      ctx.save();
+      ctx.scale(-1, 1);
+      ctx.drawImage(customCharImage, -x - player.w, y, player.w, player.h);
+      ctx.restore();
+    } else {
+      ctx.drawImage(customCharImage, x, y, player.w, player.h);
+    }
+  } else {
+    ctx.fillStyle="#171d2c";ctx.fillRect(x,y,player.w,player.h);
+    ctx.fillStyle="#d9f0ff";ctx.fillRect(x+4,y+5,22,15);
+    ctx.fillStyle="#ff4f65";ctx.fillRect(player.face>0?x+22:x-4,y+10,8,5);
+    ctx.fillStyle="#0a0d14";ctx.fillRect(x+5,y+25,7,17);ctx.fillRect(x+19,y+25,7,17);
+  }
   if(player.attack>0){
     ctx.strokeStyle="#55e7ff";ctx.lineWidth=5;ctx.beginPath();ctx.arc(x+15+(player.face*18),y+20,30,-1.0,1.0);ctx.stroke()
   }
