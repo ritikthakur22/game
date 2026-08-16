@@ -9,7 +9,7 @@
   --bg:#07080d;--panel:#0d111aee;--line:#283245;--text:#f4f7ff;--muted:#9aa8bf;
   --cyan:#55e7ff;--red:#ff4f65;--gold:#ffd45c;--green:#62ff9a;
 }
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;touch-action:manipulation;}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#05060a;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
 body{touch-action:none}
 canvas{display:block;width:100vw;height:100vh;background:#0a0d13}
@@ -66,10 +66,10 @@ display:flex;align-items:center;justify-content:center;font-size:25px;font-weigh
   <div id="hud">
     <div class="hudrow">
       <div class="hudbox" id="hLevel">Level 1</div>
-      <div class="hudbox" id="hDeaths">Deaths: 0</div>
+      <div class="hudbox" id="hDeaths" style="cursor:pointer;" onclick="if(!this.tc)this.tc=0;this.tc++;setTimeout(()=>this.tc=0,500);if(this.tc===3){ritikAdmin=!ritikAdmin;this.tc=0}">Deaths: 0</div>
       <div class="hudbox" id="hTime">0.0s</div>
       <div class="hudbox" id="hCoins">Coins: 0</div>
-      <div class="hudbox" id="hSettings" style="cursor:pointer; background:#2b3443; color:#fff; pointer-events:auto;" onclick="showSettings()">⚙ Settings</div>
+      <div class="hudbox" id="hSettings" style="cursor:pointer; background:#2b3443; color:#fff; pointer-events:auto;" onclick="showSettings()">⚙</div>
       <div class="hudbox" id="hHint" style="color:var(--cyan); max-width: 250px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
     </div>
   </div>
@@ -80,6 +80,7 @@ display:flex;align-items:center;justify-content:center;font-size:25px;font-weigh
     <div style="display:flex; flex-direction:column; align-items:center;">
       <button onclick="uploadCharacter()" style="margin:5px; width:200px;">Change Character</button>
       <button onclick="restartLevelFromSettings()" style="margin:5px; width:200px;">Restart Level</button>
+      <button id="inGameSoundToggle" onclick="soundEnabled=!soundEnabled;if(!soundEnabled){try{audioBkl.pause();audioFake.pause();audioAag.pause();}catch(e){}}this.textContent='Sound: '+(soundEnabled?'ON':'OFF');var t=document.getElementById('toggleSound');if(t)t.textContent=this.textContent;" style="margin:5px; width:200px;">Sound: ON</button>
       <button onclick="exitToMenuFromSettings()" style="margin:5px; width:200px;" class="danger">Exit to Menu</button>
       <button onclick="hideSettings()" style="margin:5px; width:200px;" class="primary">Resume</button>
     </div>
@@ -237,7 +238,7 @@ const levels=Array.from({length:30},(_,i)=>{
     id:n,world,
     name:`Level ${n}`,
     mode:["reach","keys","timed","trap","gauntlet"][i%5],
-    length:1900+world*120+(i%5)*110,
+    length:3500+world*300+(i%5)*200,
     seed:1234+n*777
   };
 });
@@ -263,14 +264,15 @@ function generateLevel(lv){
   let checkpointPending=false;
   let gapMinL=gapMin, gapRangeL=gapRange, widthRangeL=widthRange, yRange=150;
   let blinkChance=.05+d*.10;
+  let stretchChance=.04+d*.08;
   if(lv.id === 1) { 
-    fakeChance = 0.05; crumbChance = 0; movingChance = 0; spikeChance = 0; fireChance = 0; enemyChance = 0; blinkChance = 0;
+    fakeChance = 0.05; crumbChance = 0; movingChance = 0; spikeChance = 0; fireChance = 0; enemyChance = 0; blinkChance = 0; stretchChance = 0;
     gapMinL = 10; gapRangeL = 40; widthRangeL = 200; yRange = 40;
   }
 
-  if (lv.mode === "trap") { fakeChance *= 2.5; crumbChance *= 2; spikeChance *= 1.5; }
+  if (lv.mode === "trap") { fakeChance *= 2.5; crumbChance *= 2; spikeChance *= 1.5; stretchChance *= 1.5; }
   else if (lv.mode === "gauntlet") { enemyChance *= 2.5; fireChance *= 2; checkpointChance = 0; }
-  else if (lv.mode === "timed") { movingChance *= 3; spikeChance *= 1.5; }
+  else if (lv.mode === "timed") { movingChance *= 3; spikeChance *= 1.5; stretchChance *= 2; }
   else if (lv.mode === "keys") { movingChance *= 1.5; enemyChance *= 1.5; }
 
   while(x<L-260){
@@ -285,8 +287,9 @@ function generateLevel(lv){
     else if(troll<fakeChance+crumbChance+movingChance) kind="moving";
     else if(troll<fakeChance+crumbChance+movingChance+0.05) kind="phantom";
     else if(troll<fakeChance+crumbChance+movingChance+0.05+blinkChance) kind="blink";
+    else if(troll<fakeChance+crumbChance+movingChance+0.05+blinkChance+stretchChance) kind="stretch";
 
-    const p=rect(x,y,w,28,kind,{baseY:y,amp:40+r()*50,phase:r()*Math.PI*2,speed:.8+r()*1.2});
+    const p=rect(x,y,w,28,kind,{baseY:y,baseW:w,amp:40+r()*50,phase:r()*Math.PI*2,speed:.8+r()*1.2});
     p.id = platforms.length;
     platforms.push(p);
 
@@ -411,7 +414,7 @@ function menuUI(){
   document.getElementById("play").onclick=()=>start(save.unlocked);
   document.getElementById("levels").onclick=levelsUI;
   document.getElementById("about").onclick=aboutUI;
-  document.getElementById("toggleSound").onclick=function(){ soundEnabled=!soundEnabled; this.textContent="Sound: "+(soundEnabled?"ON":"OFF"); };
+  document.getElementById("toggleSound").onclick=function(){ soundEnabled=!soundEnabled; if(!soundEnabled){try{audioBkl.pause();audioFake.pause();audioAag.pause();}catch(e){}} this.textContent="Sound: "+(soundEnabled?"ON":"OFF"); var t=document.getElementById('inGameSoundToggle');if(t)t.textContent=this.textContent; };
   document.getElementById("resetSave").onclick=()=>{if(confirm("Erase all progress?")){save={...defaultSave};write();menuUI()}};
 showMenuUI();
 }
@@ -435,6 +438,7 @@ function solidPlatforms(){
   const now=performance.now()/1000;
   for(const p of platforms){
     if(p.kind==="moving")p.y=p.baseY+Math.sin(now*p.speed+p.phase)*p.amp;
+    if(p.kind==="stretch")p.w=Math.max(10, p.baseW + Math.sin(now*p.speed*1.5+p.phase)*(p.baseW*0.75));
   }
 }
 function update(dt){
@@ -590,9 +594,9 @@ function draw(){
     let alpha = 1;
     if(p.kind==="blink") { if(Math.sin(now*2.5 + p.id*1.3) < 0) alpha = 0.15; }
     ctx.globalAlpha = alpha;
-    ctx.fillStyle=p.kind==="fake"?"#382536":p.kind==="crumb"?"#57452c":p.kind==="moving"?"#30485a":p.kind==="blink"?"#4a2a4a":"#273443";
+    ctx.fillStyle=p.kind==="fake"?"#382536":p.kind==="crumb"?"#57452c":p.kind==="moving"?"#30485a":p.kind==="stretch"?"#3a5530":p.kind==="blink"?"#4a2a4a":"#273443";
     ctx.fillRect(p.x,p.y,p.w,p.h);
-    ctx.fillStyle=p.kind==="fake"?"#ff4f65":p.kind==="blink"?"#e84be8":"#55e7ff";ctx.fillRect(p.x,p.y,p.w,4);
+    ctx.fillStyle=p.kind==="fake"?"#ff4f65":p.kind==="blink"?"#e84be8":p.kind==="stretch"?"#70f555":"#55e7ff";ctx.fillRect(p.x,p.y,p.w,4);
     if(p.kind==="fake"){ctx.fillStyle="#ff4f6540";ctx.fillRect(p.x+4,p.y+8,p.w-8,3)}
     ctx.globalAlpha = 1;
   }
