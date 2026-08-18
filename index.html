@@ -178,7 +178,7 @@ const keys=Object.create(null),touch={};
 let ritikAdmin=false;
 addEventListener("keydown",e=>{
   keys[e.key.toLowerCase()]=true;
-  if(["arrowleft","arrowright","arrowup"," ","z","x","r"].includes(e.key.toLowerCase()))e.preventDefault();
+  if(["arrowleft","arrowright","arrowup"," ","z","x","r"].includes(e.key.toLowerCase()) && !e.ctrlKey && !e.metaKey) e.preventDefault();
   if(e.key.toLowerCase()==="escape"&&state==="play")pause();
   if(e.ctrlKey&&e.altKey&&e.key.toLowerCase()==="o"){
     e.preventDefault();
