@@ -9,9 +9,9 @@
   --bg:#07080d;--panel:#0d111aee;--line:#283245;--text:#f4f7ff;--muted:#9aa8bf;
   --cyan:#55e7ff;--red:#ff4f65;--gold:#ffd45c;--green:#62ff9a;
 }
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;touch-action:manipulation;}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#05060a;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
-body{touch-action:none}
+body, canvas, #ui {touch-action:none}
 canvas{display:block;width:100vw;height:100vh;background:#0a0d13}
 #ui{position:fixed;inset:0;pointer-events:none}
 .panel{pointer-events:auto;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
@@ -66,10 +66,10 @@ display:flex;align-items:center;justify-content:center;font-size:25px;font-weigh
   <div id="hud">
     <div class="hudrow">
       <div class="hudbox" id="hLevel">Level 1</div>
-      <div class="hudbox" id="hDeaths" style="cursor:pointer;" onclick="if(!this.tc)this.tc=0;this.tc++;setTimeout(()=>this.tc=0,500);if(this.tc===3){ritikAdmin=!ritikAdmin;this.tc=0}">Deaths: 0</div>
+      <button class="hudbox" id="hDeaths" style="cursor:pointer; background:transparent; border:1px solid #293447; color:var(--text); pointer-events:auto;" onpointerdown="toggleCheat(this)">Deaths: 0</button>
       <div class="hudbox" id="hTime">0.0s</div>
       <div class="hudbox" id="hCoins">Coins: 0</div>
-      <div class="hudbox" id="hSettings" style="cursor:pointer; background:#2b3443; color:#fff; pointer-events:auto;" onclick="showSettings()">⚙</div>
+      <button class="hudbox" id="hSettings" style="cursor:pointer; background:#2b3443; border:1px solid #34425d; color:#fff; pointer-events:auto; font-size:16px;" onpointerdown="showSettings(); return false;">⚙</button>
       <div class="hudbox" id="hHint" style="color:var(--cyan); max-width: 250px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
     </div>
   </div>
@@ -80,7 +80,7 @@ display:flex;align-items:center;justify-content:center;font-size:25px;font-weigh
     <div style="display:flex; flex-direction:column; align-items:center;">
       <button onclick="uploadCharacter()" style="margin:5px; width:200px;">Change Character</button>
       <button onclick="restartLevelFromSettings()" style="margin:5px; width:200px;">Restart Level</button>
-      <button id="inGameSoundToggle" onclick="soundEnabled=!soundEnabled;if(!soundEnabled){try{audioBkl.pause();audioFake.pause();audioAag.pause();}catch(e){}}this.textContent='Sound: '+(soundEnabled?'ON':'OFF');var t=document.getElementById('toggleSound');if(t)t.textContent=this.textContent;" style="margin:5px; width:200px;">Sound: ON</button>
+      <button id="inGameSoundToggle" onclick="toggleInGameSound()" style="margin:5px; width:200px;">Sound: ON</button>
       <button onclick="exitToMenuFromSettings()" style="margin:5px; width:200px;" class="danger">Exit to Menu</button>
       <button onclick="hideSettings()" style="margin:5px; width:200px;" class="primary">Resume</button>
     </div>
@@ -150,10 +150,6 @@ try {
   }
 } catch(e) {}
 function uploadCharacter() {
-  if(save.coins < 3) {
-    alert("You need at least 3 coins to upload a custom character image!");
-    return;
-  }
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = 'image/png, image/jpeg, image/x-icon, image/gif';
@@ -190,6 +186,13 @@ addEventListener("keydown",e=>{
   }
 },{passive:false});
 addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
+document.addEventListener("dblclick",e=>e.preventDefault(),{passive:false});
+let lastTouchEnd=0;
+document.addEventListener("touchend",e=>{
+  const now=Date.now();
+  if(now-lastTouchEnd<=300 && e.target.tagName !== 'BUTTON') e.preventDefault();
+  lastTouchEnd=now;
+},{passive:false});
 document.querySelectorAll(".t").forEach(b=>{
   const k=b.dataset.k;
   const down=e=>{e.preventDefault();touch[k]=true};
@@ -373,7 +376,7 @@ function toast(s,t=1.2){elToast.textContent=s;elToast.style.display="block";toas
 function pause(){paused=!paused;toast(paused?"PAUSED":"GO",1)}
 
 function showSettings() {
-  if (state !== "play") return;
+  if (state === "menu") return;
   paused = true;
   document.getElementById("settingsPanel").style.display = "block";
 }
@@ -674,6 +677,34 @@ function frame(now){
   update(dt);draw();requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
+window.showSettings = showSettings;
+window.hideSettings = hideSettings;
+window.restartLevelFromSettings = restartLevelFromSettings;
+window.exitToMenuFromSettings = exitToMenuFromSettings;
+window.uploadCharacter = uploadCharacter;
+window.toggleInGameSound = function() {
+  soundEnabled = !soundEnabled;
+  if(!soundEnabled){try{audioBkl.pause();audioFake.pause();audioAag.pause();}catch(e){}}
+  const tGame = document.getElementById('inGameSoundToggle');
+  const tMenu = document.getElementById('toggleSound');
+  if(tGame) tGame.textContent = 'Sound: ' + (soundEnabled ? 'ON' : 'OFF');
+  if(tMenu) tMenu.textContent = 'Sound: ' + (soundEnabled ? 'ON' : 'OFF');
+};
+window.toggleCheat = function(btn) {
+  const now = Date.now();
+  if(!btn.lastClick) btn.lastClick = 0;
+  if(!btn.clickCount) btn.clickCount = 0;
+  if(now - btn.lastClick < 500) {
+    btn.clickCount++;
+  } else {
+    btn.clickCount = 1;
+  }
+  btn.lastClick = now;
+  if (btn.clickCount >= 3) {
+    ritikAdmin = !ritikAdmin;
+    btn.clickCount = 0;
+  }
+};
 })();
 </script>
 </body>
