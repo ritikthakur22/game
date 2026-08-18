@@ -79,6 +79,7 @@ display:flex;align-items:center;justify-content:center;font-size:25px;font-weigh
     <h2>Game Paused</h2>
     <div style="display:flex; flex-direction:column; align-items:center;">
       <button onclick="uploadCharacter()" style="margin:5px; width:200px;">Change Character</button>
+      <button onclick="openLevelsFromGame()" style="margin:5px; width:200px;">Levels</button>
       <button onclick="restartLevelFromSettings()" style="margin:5px; width:200px;">Restart Level</button>
       <button id="inGameSoundToggle" onclick="toggleInGameSound()" style="margin:5px; width:200px;">Sound: ON</button>
       <button onclick="exitToMenuFromSettings()" style="margin:5px; width:200px;" class="danger">Exit to Menu</button>
@@ -305,7 +306,7 @@ function generateLevel(lv){
 
     let hazardHere=false;
     if(!hasCheckpoint){
-      if(r()<spikeChance){hazards.push(rect(x+w*.55,y-120,28,120,"spike"));hazardHere=true}
+      if(r()<spikeChance){hazards.push(rect(x+w*.55,y-30,28,30,"spike"));hazardHere=true}
       if(r()<fireChance){hazards.push(rect(x+w*.15,y+28,Math.min(90,w*.7),18,"fire"));hazardHere=true}
     }
     
@@ -476,13 +477,14 @@ function update(dt){
     if(p.kind==="phantom")continue;
     if(p.kind==="blink" && Math.sin(now*2.5 + p.id*1.3) < 0) continue;
     if(p.kind==="fake"&&p.revealed)continue;
-    if(p.kind==="fake"&&!p.revealed&&aabb(player,{...p,y:p.y,w:p.w,h:p.h})&&player.vy>0){
-      if(!p._timer)p._timer=.22; else p._timer-=dt;
-      if(p._timer<=0){p.revealed=true;toast("lol fake block/steps",.8);playExternalSound('fake');}
+    if(p.kind==="fake"&&!p.revealed&&aabb(player,{...p,y:p.y-1,h:p.h+2})){
+      if(!p._timer) p._timer = 0.1;
+      p._timer -= dt;
+      if(p._timer<=0){p.revealed=true;toast("TRICKED! FAKE PLATFORM LOL!", 2.5);playExternalSound('fake');}
     }
     if(aabb(player,p)&&player.vy>=0&&player.y+player.h-player.vy*dt<=p.y+8){
       player.y=p.y-player.h;player.vy=0;player.onGround=true;player.coyote=.11;
-      if(p.kind==="crumb"){p.w=Math.max(0,p.w-dt*40);if(p.w<15){p.kind="broken";toast("The platform has resigned.",.7)}}
+      if(p.kind==="crumb"){p.w=Math.max(0,p.w-dt*50);if(p.w<15){p.kind="broken";toast("Platform dissolved! Get baited!", 2.5);}}
     }
   }
   if(!player.onGround)player.coyote=Math.max(0,player.coyote-dt);
@@ -507,7 +509,7 @@ function update(dt){
     const nearX=Math.abs((player.x+player.w/2)-cp.x)<34;
     const nearY=Math.abs((player.y+player.h)-cp.y)<52;
     if(!cp.used&&nearX&&nearY){
-      if(!cp.safe) { toast("FAKE CHECKPOINT! LOL", 1.5); respawn("fake"); }
+      if(!cp.safe) { cp.used = true; toast("FAKE CHECKPOINT! LOL", 1.5); if(!ritikAdmin) respawn("fake"); }
       else {
         cp.used=true;
         player.checkpoint={x:cp.x-15,y:cp.y-player.h};
@@ -518,7 +520,7 @@ function update(dt){
   for(const coin of coins){
     if(!coin.got&&Math.hypot(player.x-coin.x,player.y-coin.y)<35){
       coin.got=true;
-      if(coin.fake) { toast("THAT WAS NOT A COIN.", 1.5); respawn("fake"); }
+      if(coin.fake) { toast("THAT WAS NOT A COIN.", 1.5); if(!ritikAdmin) respawn("fake"); }
       else { save.coins++;write();playSound('coin'); }
     }
   }
@@ -526,7 +528,11 @@ function update(dt){
   // Deliberate ragebait: some exits are fake and send you backward.
   const exit=platforms.find(p=>p.kind==="exit");
   if(exit && player.x <= exit.x+exit.w && player.x+player.w >= exit.x && player.y <= exit.y+exit.h && player.y+player.h >= exit.y){
-    if(level.id%6===0 && !exit.used){exit.used=true;player.x=Math.max(50,player.x-420);player.vy=-350;toast("FAKE EXIT. Incredible.",1.4);shake=8;playExternalSound('fake');}
+    if(level.id%6===0 && !exit.used){
+      exit.used=true;
+      if(!ritikAdmin) { player.x=Math.max(50,player.x-420);player.vy=-350;toast("FAKE EXIT. Incredible.",1.4);shake=8;playExternalSound('fake'); }
+    }
+    else if (exit.used && level.id%6===0) { /* Wait for real exit */ }
     else finish();
   }
 
@@ -682,6 +688,15 @@ window.hideSettings = hideSettings;
 window.restartLevelFromSettings = restartLevelFromSettings;
 window.exitToMenuFromSettings = exitToMenuFromSettings;
 window.uploadCharacter = uploadCharacter;
+window.levelsUI = levelsUI;
+window.openLevelsFromGame = function() {
+  hideSettings();
+  state = "menu";
+  elMenu.classList.remove("hidden");
+  elHud.classList.remove("visible");
+  elTouch.style.display = "none";
+  levelsUI();
+};
 window.toggleInGameSound = function() {
   soundEnabled = !soundEnabled;
   if(!soundEnabled){try{audioBkl.pause();audioFake.pause();audioAag.pause();}catch(e){}}
